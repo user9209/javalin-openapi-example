@@ -1,7 +1,9 @@
 package io.javalin.example.java.user;
 
+import io.javalin.core.security.BasicAuthCredentials;
 import io.javalin.example.java.ErrorResponse;
 import io.javalin.http.Context;
+import io.javalin.http.ForbiddenResponse;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.plugin.openapi.annotations.*;
 
@@ -68,15 +70,30 @@ public class UserController {
             path = "/users/:userId",
             method = HttpMethod.PATCH,
             pathParams = {@OpenApiParam(name = "userId", type = Integer.class, description = "The user ID")},
+            /*
+            headers = {
+                    @OpenApiParam(name = "X-API-USERNAME", description = "API-USERNAME", required = true),
+                    @OpenApiParam(name = "X-API-KEY", description = "API-Key", required = true)
+            },
+             */
             tags = {"User"},
             requestBody = @OpenApiRequestBody(content = {@OpenApiContent(from = NewUserRequest.class)}),
             responses = {
                     @OpenApiResponse(status = "204"),
                     @OpenApiResponse(status = "400", content = {@OpenApiContent(from = ErrorResponse.class)}),
                     @OpenApiResponse(status = "404", content = {@OpenApiContent(from = ErrorResponse.class)})
+            },
+            security = {
+                @OpenApiSecurity(name = "API_USER"),
+                @OpenApiSecurity(name = "API_KEY")
             }
     )
     public static void update(Context ctx) {
+
+        if(!"user".equals(ctx.header("X-API-USERNAME")) || !"f45s4f4sfs5".equals(ctx.header("X-API-KEY"))){
+            throw new ForbiddenResponse("Auth failed!");
+        }
+
         User user = UserService.findById(validPathParamUserId(ctx));
         if (user == null) {
             throw new NotFoundResponse("User not found");
@@ -98,9 +115,26 @@ public class UserController {
                     @OpenApiResponse(status = "204"),
                     @OpenApiResponse(status = "400", content = {@OpenApiContent(from = ErrorResponse.class)}),
                     @OpenApiResponse(status = "404", content = {@OpenApiContent(from = ErrorResponse.class)})
+            },
+            security = {
+                @OpenApiSecurity(name = "basicAuth")
             }
     )
     public static void delete(Context ctx) {
+
+        if(ctx.sessionAttribute("logged-in-user") == null) {
+            if(!ctx.basicAuthCredentialsExist()) {
+                throw new ForbiddenResponse("Auth failed!");
+            }
+            BasicAuthCredentials creds = ctx.basicAuthCredentials();
+            if (credentialsAreCorrect(creds)) {
+                ctx.sessionAttribute("logged-in-user", creds.getUsername());
+            }
+            else {
+                throw new ForbiddenResponse("Auth failed!");
+            }
+        }
+
         User user = UserService.findById(validPathParamUserId(ctx));
         if (user == null) {
             throw new NotFoundResponse("User not found");
@@ -110,9 +144,14 @@ public class UserController {
         }
     }
 
+    private static boolean credentialsAreCorrect(BasicAuthCredentials creds) {
+
+        return "user".equals(creds.getUsername()) && "1234".equals(creds.getPassword());
+    }
+
     // Prevent duplicate validation of userId
     private static int validPathParamUserId(Context ctx) {
-        return ctx.pathParam("userId", Integer.class).check(id -> id > 0).get();
+        return ctx.pathParam("userId", Integer.class).check(id -> id >= 0).get();
     }
 
 }
