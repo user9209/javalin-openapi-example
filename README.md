@@ -5,3 +5,7 @@
 The project contains source roots and main files for Java:
 
 * src: `src/main/java/`, main: `io.javalin.example.java.Main`
+
+## Screenshot
+
+![Screenshot](screenshot.png)
